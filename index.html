@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>ИИ Бот - HuggingFace API Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      background: #f4f8fb;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      flex-direction: column;
+      min-height: 100vh;
+      margin: 0;
+    }
+    h2 {
+      margin-top: 40px;
+      color: #222e50;
+      letter-spacing: 1px;
+    }
+    .chat-container {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+      padding: 32px 24px 24px 24px;
+      width: 100%;
+      max-width: 410px;
+      margin: 24px auto;
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      margin-bottom: 8px;
+      font-weight: bold;
+      color: #333;
+    }
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+      border-radius: 6px;
+      border: 1px solid #d3dbe3;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 12px;
+      transition: border 0.2s;
+    }
+    textarea:focus {
+      border: 1.8px solid #659ad2;
+      outline: none;
+    }
+    #model {
+      text-align: center;
+      padding-top: 5px;
+    }
+    button {
+      background: #3578e5;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 0;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.19s;
+      margin-top: 8px;
+    }
+    button:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .response-block {
+      margin-top: 24px;
+      background: #f9fafb;
+      border-radius: 6px;
+      min-height: 50px;
+      padding: 12px 10px;
+      color: #1a2947;
+      word-break: break-word;
+      border: 1px solid #dce1e8;
+      font-size: 15px;
+      white-space: pre-wrap;
+    }
+    .info-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 14px;
+      color: #7a869a;
+    }
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3578e5;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      animation: spin 0.9s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+    @media (max-width: 480px) {
+      .chat-container { padding: 18px 4vw 18px 4vw; }
+    }
+  </style>
+</head>
+<body>
+  <h2>ИИ чат-бот (HuggingFace API)</h2>
+  <div class="chat-container">
+    <label for="userInput">Ваш запрос:</label>
+    <textarea id="userInput" placeholder="Введите ваш вопрос ИИ боту..."></textarea>
+    <button id="sendBtn">Отправить</button>
+    <div class="info-row" id="infoRow" style="display:none;">
+      <span class="loader" id="loader" style="display:none;"></span>
+      <span id="timer" style="display:none;">0.0 сек</span>
+    </div>
+    <div class="response-block" id="responseBlock"></div>
+    <span id="model"></span>
+  </div>
+  <script>
+    const API_URL = "https://router.huggingface.co/novita/v3/openai/chat/completions";
+    const MODEL = "moonshotai/kimi-k2-instruct";
+    const TEMPERATURE = 0.3
+    const API_KEY = "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";
+    const modelNameBlock = document.getElementById('model');
+    const sendBtn = document.getElementById('sendBtn');
+    const userInput = document.getElementById('userInput');
+    const responseBlock = document.getElementById('responseBlock');
+    const loader = document.getElementById('loader');
+    const timer = document.getElementById('timer');
+    const infoRow = document.getElementById('infoRow');
+    let timerInterval;
+    let startTime;
+
+    modelNameBlock.innerHTML  = MODEL
+
+    function startLoader() {
+      loader.style.display = '';
+      timer.style.display = '';
+      infoRow.style.display = '';
+      responseBlock.textContent = '';
+      startTime = Date.now();
+      timer.textContent = "0.0 сек";
+      timerInterval = setInterval(() => {
+        let diff = (Date.now() - startTime) / 1000;
+        timer.textContent = diff.toFixed(1) + " сек";
+      }, 50);
+    }
+
+    function stopLoader() {
+      loader.style.display = 'none';
+      clearInterval(timerInterval);
+    }
+
+    async function askBot() {
+      const prompt = userInput.value.trim();
+      if (!prompt) return;
+
+      sendBtn.disabled = true;
+      startLoader();
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + API_KEY,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            messages: [
+            {
+                "role": "user",
+                "content": prompt
+            }
+          ],
+            model: MODEL,
+            "temperature": TEMPERATURE
+          })
+        });
+
+        stopLoader();
+
+        if (!res.ok) {
+          responseBlock.textContent = "Ошибка: " + res.status + " " + res.statusText;
+          sendBtn.disabled = false;
+          return;
+        }
+
+        const data = await res.json();
+        let answer = "";
+
+        // HuggingFace returns result in array or object, handle both
+        if (data.choices[0].message.content) {
+          answer = data.choices[0].message.content;
+        } else if (data.error) {
+          answer = "Ошибка API: " + data.error;
+        } else {
+          answer = "Не удалось получить ответ. Попробуйте позже.";
+        }
+
+        responseBlock.textContent = answer;
+        sendBtn.disabled = false;
+      } catch (e) {
+        stopLoader();
+        responseBlock.textContent = "Ошибка сети: " + e.message;
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.onclick = askBot;
+    userInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        askBot();
+      }
+    });
+  </script>
+</body>
+</html>
